@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	_ "gocv.io/x/gocv"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
