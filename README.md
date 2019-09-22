@@ -2,7 +2,7 @@
 Simper, more Unix-philosophical implementation of auto colorscheme generator. It gets Image as an input, gives you a well generated color scheme.
 
 ## Things
-![ColTerm](https://github.com/SeungheonOh/ColTerm/img/colterm.jpg)
+![ColTerm](https://github.com/SeungheonOh/ColTerm/blob/master/img/colterm.jpg)
 Well, as you notice, it's really similar to [pywal](https://github.com/dylanaraps/pywal). Unlike pywal, colterm is designed make a colorscheme only,
 but not to manage whole wallpaper system, therefore it's a lot simpler. You might ask, then why should I use it? I would say colterm would work best for those of you 
 who would save your colorschemes by a image instead of having not really clean or commented clusters of colorschemes in you config files. You can just
