@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	_ "gocv.io/x/gocv"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
