@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
+	_ "gocv.io/x/gocv"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -13,7 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"sort"
-	"time"
+	"strings"
 )
 
 func GetRange(c uint8) int {
@@ -24,7 +26,6 @@ func GetRange(c uint8) int {
 	} else if 170 <= c && c <= 255 {
 		return 2
 	}
-
 	return 3
 }
 
@@ -108,37 +109,72 @@ func GetColor(color [][3]uint8, sample [3]uint8) [][3]uint8 {
 	return color
 }
 
+func NormalizeColor(color [3]uint8) [3]uint8 {
+	min := uint8(255)
+	for _, c := range color {
+		if c < min {
+			min = c
+		}
+	}
+	for i, _ := range color {
+		color[i] -= min
+	}
+	return color
+}
+
+func GetBG(color [3]uint8, brightness uint8) [3]uint8 {
+	norm := NormalizeColor(color)
+	for i, _ := range norm {
+		if int(norm[i])+int(brightness) > 255 {
+			norm[i] = 255
+			continue
+		} else if int(norm[i])+int(brightness) < 0 {
+			norm[i] = 0
+			continue
+		}
+		norm[i] += brightness
+	}
+	return norm
+}
+
 func main() {
-	start := time.Now()
-	imgPath := os.Args[1]
+	const (
+		XresourceCache = "/.cache/colterm/Xresources"
+	)
+
+	FileIn := flag.String("f", "", "Input file, use this option or put file behind the options")
+
+	BgBrightness := flag.Int("bg", 20, "Set background brightness(0 - 255)")
+	FgBrightness := flag.Int("fg", 150, "Set foreground brightness(0 - 255)")
+
+	FileExport := flag.String("e", "", "Export file to (Path)")
+	Tamplate := flag.String("t", "", "Create color scheme with a given tamplate file, created file will saved in your home directory")
+	PaletteOnly := flag.Bool("n", false, "Print colors only without applying to Xresources")
+
+	flag.Parse()
+
+	if len(flag.Args()) == 0 && *FileIn == "" {
+		flag.PrintDefaults()
+		return
+	}
+
+	imgPath := *FileIn
+
+	if imgPath == "" {
+		imgPath = flag.Args()[0]
+	}
 
 	img, err := LoadImage(imgPath)
 	if err != nil {
 		panic(err)
 	}
 
-	palette := GetPalette(img)
-	// has to be > 11
-
-	for i, p := range palette {
-		if i%4 == 0 && i != 0 {
-			fmt.Print("\n")
-		}
-		fmt.Printf("\033[48;2;%d;%d;%dm%s\033[49m", p[0], p[1], p[2], ToHex(p))
+	Palette := GetPalette(img)
+	if len(Palette) < 10 {
+		panic("This image is not appropriate for generating color scheme")
 	}
 
-	NewXre, err := os.Create("/home/seungheonoh/.XreCustomColor")
-	defer NewXre.Close()
-	if err != nil {
-		panic(err)
-	}
-	OriXre, err := ioutil.ReadFile("/home/seungheonoh/.Xresources")
-	if err != nil {
-		panic(err)
-	}
-
-	var XresourceData string
-	var ColorScheme [10]string
+	var ColorScheme [10][3]uint8
 	var ColorTamplete = [10][3]uint8{
 		[3]uint8{0, 0, 0},
 		[3]uint8{150, 150, 150},
@@ -153,42 +189,94 @@ func main() {
 	}
 
 	for i := 0; i < 10; i++ {
-		value := GetColor(palette, ColorTamplete[i])
+		value := GetColor(Palette, ColorTamplete[i])
 		for _, val := range value {
 			gotVal := true
 			for _, item := range ColorScheme {
-				if item == ToHex(val) {
+				if item == val {
 					gotVal = false
 				}
 			}
 			if gotVal {
-				ColorScheme[i] = ToHex(val)
+				ColorScheme[i] = val
 				break
 			}
 		}
 	}
-	fmt.Println("\n", ColorScheme)
+	if *BgBrightness != -1 {
+		ColorScheme[0] = GetBG(GetColor(Palette, ColorTamplete[0])[0], uint8(*BgBrightness))
+	}
+	if *FgBrightness != -1 {
+		ColorScheme[1] = GetBG(GetColor(Palette, ColorTamplete[1])[0], uint8(*FgBrightness))
+	}
 
-	XresourceData += fmt.Sprintf("*.background: #%s\n", ColorScheme[0])
-	XresourceData += fmt.Sprintf("*.foreground: #%s\n", ColorScheme[1])
-	XresourceData += fmt.Sprintf("*.color0: #%s\n", ColorScheme[2])
-	XresourceData += fmt.Sprintf("*.color1: #%s\n", ColorScheme[3])
-	XresourceData += fmt.Sprintf("*.color2: #%s\n", ColorScheme[4])
-	XresourceData += fmt.Sprintf("*.color3: #%s\n", ColorScheme[5])
-	XresourceData += fmt.Sprintf("*.color4: #%s\n", ColorScheme[6])
-	XresourceData += fmt.Sprintf("*.color5: #%s\n", ColorScheme[7])
-	XresourceData += fmt.Sprintf("*.color6: #%s\n", ColorScheme[8])
-	XresourceData += fmt.Sprintf("*.color7: #%s\n", ColorScheme[9])
+	fmt.Printf("   ¯\\_(•_•)_/¯   \nHeres your colors\n\n")
+	fmt.Printf("Background \033[48;2;%d;%d;%dm%s\033[49m\n", ColorScheme[0][0], ColorScheme[0][1], ColorScheme[0][2], ToHex(ColorScheme[0]))
+	fmt.Printf("Foreground \033[48;2;%d;%d;%dm%s\033[49m\n", ColorScheme[1][0], ColorScheme[1][1], ColorScheme[1][2], ToHex(ColorScheme[1]))
+	for i := 2; i < len(ColorScheme); i++ {
+		c := ColorScheme[i]
+		fmt.Printf("Color%d     \033[48;2;%d;%d;%dm%s\033[49m\n", i-2, c[0], c[1], c[2], ToHex(c))
+	}
 
-	NewXre.Write(append([]byte(XresourceData), OriXre...))
+	if *PaletteOnly {
+		return
+	}
 
-	ReloadXresource := exec.Command("xrdb", "/home/seungheonoh/.XreCustomColor")
+	if *Tamplate != "" {
+		StTamplate, err := ioutil.ReadFile(*Tamplate)
+		if err != nil {
+			panic(err)
+		}
+		StData := string(StTamplate)
+		StExport, err := os.Create(os.Getenv("HOME") + "/Colterm-" + *Tamplate)
+		defer StExport.Close()
+		if err != nil {
+			panic(err)
+		}
+
+		StData = strings.ReplaceAll(StData, "background", "#"+ToHex(ColorScheme[0]))
+		StData = strings.ReplaceAll(StData, "foreground", "#"+ToHex(ColorScheme[1]))
+		StData = strings.ReplaceAll(StData, "cursor", "#"+ToHex(ColorScheme[1]))
+		for i := 0; i < len(ColorScheme)-2; i++ {
+			StData = strings.ReplaceAll(StData, fmt.Sprintf("color%d", i), "#"+ToHex(ColorScheme[i+2]))
+			StData = strings.ReplaceAll(StData, fmt.Sprintf("color%d", i+8), "#"+ToHex(ColorScheme[i+2]))
+		}
+
+		_, err = StExport.Write([]byte(StData))
+		StExport.Close()
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// setting Xresources
+	var XresourcePath string
+	if *FileExport == "" {
+		XresourcePath = os.Getenv("HOME") + XresourceCache
+	} else {
+		XresourcePath = *FileExport + "/ColTerm-Xresource"
+	}
+	NewXre, err := os.Create(XresourcePath)
+	defer NewXre.Close()
+	if err != nil {
+		panic(err)
+	}
+
+	var XresourceData string
+	XresourceData += fmt.Sprintf("! Created by Colterm with %s\n", imgPath)
+	XresourceData += fmt.Sprintf("*.background: #%s\n", ToHex(ColorScheme[0]))
+	XresourceData += fmt.Sprintf("*.foreground: #%s\n", ToHex(ColorScheme[1]))
+	for i := 0; i < 8; i++ {
+		XresourceData += fmt.Sprintf("*.color%d: #%s\n", i, ToHex(ColorScheme[i+2]))
+	}
+
+	NewXre.Write([]byte(XresourceData))
+
+	ReloadXresource := exec.Command("xrdb", "-merge", "-quiet", os.Getenv("HOME")+XresourceCache)
 
 	err = ReloadXresource.Run()
 	if err != nil {
 		panic(err)
 	}
 
-	end := time.Now()
-	fmt.Println(end.Sub(start))
 }
