@@ -15,6 +15,14 @@ It supports only Xresources. However, you can input a ```Tamplate``` for your co
 ## Requirements
 Nope, only Go standard libraries (I wrote the coloring algorithm by myself, compactly). You need ```xrdb``` to set Xresources however.
 
+## Installation
+`go get github.com/SeungheonOh/colterm`  
+Make sure you have your `GOPATH` set, e.g.:  
+```bash
+export GOPATH=/home/$USER/go
+export PATH=$PATH:$GOPATH/bin
+```
+
 ## Usage
 ```
 USAGE:
