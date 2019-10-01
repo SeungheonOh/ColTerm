@@ -138,8 +138,11 @@ func GetBG(color [3]uint8, brightness uint8) [3]uint8 {
 
 func main() {
 	const (
-		XresourceCache = "/.cache/colterm/Xresources"
+		XresourceCacheDir = "/.cache/colterm"
+		XresourceCache = XresourceCacheDir + "/Xresources"
 	)
+
+	os.MkdirAll(os.Getenv("HOME") + XresourceCacheDir, os.ModePerm)
 
 	FileIn := flag.String("f", "", "Input file, use this option or put file behind the options")
 
@@ -250,6 +253,7 @@ func main() {
 
 	// setting Xresources
 	var XresourcePath string
+
 	if *FileExport == "" {
 		XresourcePath = os.Getenv("HOME") + XresourceCache
 	} else {
